@@ -1,0 +1,23 @@
+# -- Application templates --
+
+[templates."omni_usd_viewer"]
+class = "ApplicationTemplate"
+name = "USD Viewer"
+url = "."
+subpath = "apps/usd_viewer/omni.usd_viewer.kit"
+setup_extension = "omni_usd_viewer_setup"
+variables.application_name = "my_company.my_usd_viewer"
+variables.application_display_name = "My USD Viewer"
+variables.version = "0.1.0"
+
+
+# -- Extension templates --
+
+[templates."omni_usd_viewer_setup"]
+class = "SetupExtensionTemplate"
+name = "Omni USD Viewer Setup"
+url = "."
+subpath = "extensions/usd_viewer.setup/template"
+variables.extension_name = "my_company.my_usd_viewer_setup_extension"
+variables.extension_display_name = "My USD Viewer Setup Extension"
+variables.version = "0.1.0"
