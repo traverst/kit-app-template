@@ -20,7 +20,7 @@ tags = [
 
 #string array, each line is a new line, keep lines under 256 char and keep lines under 4
 description = [
-"My Company USD Explorer is an Omniverse app for Reviewing and Constructing large facilities such as factories, warehouses and more. It is built using NVIDIA Omniverse™ Kit. The Scene Description and in-memory model is based on Pixar's USD. Omniverse USD Composer takes advantage of the advanced workflows of USD like Layers, Variants, Instancing and much more.",
+"My Company USD Explorer is an Omniverse app for Reviewing and Constructing large facilities such as factories, warehouses and more. It is built using NVIDIA Omniverse Kit. The Scene Description and in-memory model is based on Pixar's USD. Omniverse USD Composer takes advantage of the advanced workflows of USD like Layers, Variants, Instancing and much more.",
 "When connected to a Omniverse Nucleus server, worlds can be authored LIVE across multiple Omniverse applications, machines and users for advanced collaborative workflows."
 ]
 
