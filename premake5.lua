@@ -13,3 +13,8 @@ repo_build.prebuild_copy {
 }
 
 -- Apps: for each app generate batch files and a project based on kit files (e.g. my_name.my_app.kit)
+
+define_app("dst.usd_composer.kit")
+define_app("dst.usd_composer_streaming.kit")
+define_app("dst.usd_explorer.kit")
+define_app("dst.usd_explorer_streaming.kit")
