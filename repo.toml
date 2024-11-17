@@ -11,7 +11,7 @@ import_configs = [
 ]
 
 # Repository Name
-name = "kit-app-template"
+name = "White Tree Babylon"
 
 # Disable linbuild until we know what we want to do with this.
 [repo_build.docker]
@@ -63,6 +63,7 @@ archive_format = "zip"                      # We support "7z", "zip", "tar.gz", 
 
 files = [
     ["**"],
+    ["../../_build/target-deps/pip_prebundle/**"],
 ]
 files_exclude = [
     ["_*/**"],
