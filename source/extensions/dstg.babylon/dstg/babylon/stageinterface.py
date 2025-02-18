@@ -18,10 +18,14 @@ import asyncio
 
 from .applicationenvironment import applicationenvironment
 
+from .ActivationManager import ActivationManager
+
 from functools import partial
 
 
 logger = logging.getLogger(__name__)
+
+
 
 class StageInterface(object):
     """
@@ -41,8 +45,10 @@ class StageInterface(object):
     def __init__(self, extension: 'Babylon5'):
         super().__init__()
         self.get_stage()
+        self.activations = None
         self.extension = extension
         self.subscribe_to_stage_selection_changes()
+       # self.visibility_mgr = VisibilityManager()
 
     @property
     def stage(self):
@@ -97,20 +103,34 @@ class StageInterface(object):
 
     def _on_selection_changed(self):
 
+        carb.log_info("on selection changed")
+
         selection = self.context.get_selection().get_selected_prim_paths()
         if len(selection) < 1:
             return
 
-        print("event")
 
         element_prims = [self.stage.GetPrimAtPath(e) for e in selection]
-        object_types = [e.GetAttribute("objectType").Get() for e in element_prims]
+       # object_types = [e.GetAttribute("objectType").Get() for e in element_prims]
+        target = element_prims[0]
 
-        print(element_prims[0].GetName())
+        # GUI: we have a type that is xform and a name that is mesh_D_Solid then revert to the parent in the selection!
+
+        print(target.GetTypeName())
+        print(target.GetName().split("/")[-1])
+
+        if ((target.GetTypeName() == "Mesh") or ((target.GetTypeName() == "Xform") and (target.GetName().split("/")[-1] == "mesh_D_Solid"))):  # meshes don't have any info so go to the parent which will!
+            target = target.GetParent()
+            self.context.get_selection().set_prim_path_selected(str(target.GetPath()), True, True, True)
+        print("path: ")
+        print(target.GetPath())
+        print(str(target.GetPath()).removeprefix("/World/CCPB_811_816_Whole_boat/"))
+        print("Name: " + target.GetName())
 
         # testquery = f"[:find ?entityid :where [?entityid :object/name \"{element_prims[0].GetName()}\"]]
+        name = str(target.GetPath()).removeprefix("/World/CCPB_811_816_Whole_boat/")
 
-        testquery = f"[:find ?entityid ?property-name ?value ?value-type :in $ :where [?entityid :object/name \"{element_prims[0].GetName()}\"] [?entityid :object/properties ?prop] [?prop :property/name ?property-name] (or-join [?prop ?value ?value-type] (and [?prop :property/value ?value] [(ground :property/value) ?value-type]) (and [?prop :property/string-value ?value] [(ground :property/string-value) ?value-type]) (and [?prop :property/int-value ?value] [(ground :property/int-value) ?value-type]) (and [?prop :property/float-value ?value] [(ground :property/float-value) ?value-type]) (and [?prop :property/bool-value ?value] [(ground :property/bool-value) ?value-type]) (and [?prop :property/entity-value ?value] [(ground :property/entity-value) ?value-type]) (and [?prop :property/vector-value ?value] [(ground :property/vector-value) ?value-type]))]"
+        testquery = f"[:find ?entityid ?property-name ?value ?value-type ?property-group :in $ :where [?entityid :object/name \"{name}\"] [?entityid :object/properties ?prop] [?prop :property/group ?property-group] [?prop :property/name ?property-name] (or-join [?prop ?value ?value-type] (and [?prop :property/value ?value] [(ground :property/value) ?value-type]) (and [?prop :property/string-value ?value] [(ground :property/string-value) ?value-type]) (and [?prop :property/int-value ?value] [(ground :property/int-value) ?value-type]) (and [?prop :property/float-value ?value] [(ground :property/float-value) ?value-type]) (and [?prop :property/bool-value ?value] [(ground :property/bool-value) ?value-type]) (and [?prop :property/entity-value ?value] [(ground :property/entity-value) ?value-type]) (and [?prop :property/vector-value ?value] [(ground :property/vector-value) ?value-type]))]"
 
         kafka_interface = applicationenvironment.Omni_Kafka_Interface
 
@@ -135,18 +155,63 @@ class StageInterface(object):
         # Transform each sublist into a dictionary
         processed_attributes = []
         for item in result_list:
-            if len(item) == 4:  # Ensure we have all required elements
+            if len(item) == 5:  # Ensure we have all required elements
                 attribute_dict = {
                     'entity': item[0],
                     'name': item[1],
                     'value': item[2],
-                    'type': item[3]
+                    'type': item[3],
+                    'group': item[4]
                 }
                 processed_attributes.append(attribute_dict)
 
         return processed_attributes
 
+    def process_manual_query_result(self, message_dict):
 
+        carb.log_info("Processing Manual Query Result")
+
+        if not self.activations or not self.activations.stage:
+            self.activations = ActivationManager(self._stage) # redo activation if it doesn't exist or the stage isnt set
+
+        # Extract kwargs from the dictionary
+        kwargs = message_dict.get('kwargs', {})
+
+        # Check if this is a QueryResult operation
+        if kwargs.get('operation') != 'QueryResult':
+            return None
+
+        # Extract the Result list
+        result_list = kwargs.get('Result', [])
+
+        toplevel = "/World/CCPB_811_816_Whole_boat"
+
+        #
+        # self.make_visible(["/World/CCPB_811_816_Whole_boat/" + original for original in result_list])
+        # omni.usd.commands.ToggleVisibilitySelectedPrimsCommand(["/World/CCPB_811_816_Whole_boat/" + original for original in result_list], self._stage) #,true
+        #if self.visiblity_state_cache:
+        #    self.visibility_mgr.restore_visibility(self._stage)
+
+        #self.visibility_mgr.set_visibility_for_all_except(self._stage, ["/World/CCPB_811_816_Whole_boat/" + original for original in result_list])
+
+        #self.toggle_viewport_visibility(self._stage, ["/World/CCPB_811_816_Whole_boat/" + original for original in result_list])
+
+        self.activations.activate(toplevel, [toplevel + "/" + original for original in result_list])
+        print("Message processing finished")
+
+
+    def toggle_viewport_visibility(self, stage, visible_paths):
+
+        import omni.kit.viewport.utility as vp_utils
+
+        viewport_api = vp_utils.get_active_viewport()
+        if viewport_api:
+            viewport_api.draw_mode = "wireframe"
+            omni.kit.viewport.actions.toggle_mesh_visibility()
+
+        omni.kit.commands.execute('ToggleVisibilitySelectedPrims',
+            selected_paths=visible_paths,
+            state=True)
 
  #   def _on_equipment_select(self, eq_id):
 

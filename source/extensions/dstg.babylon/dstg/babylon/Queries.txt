@@ -1,0 +1,3 @@
+[:find ?name :where [?entityid :object/name ?name] [?entityid :object/properties ?props] [?props :property/group "ShipConstructor"]]
+
+[:find ?name :where [?props :property/group "ShipConstructor"] [?entityid :object/properties ?props] [?entityid :object/name ?name]]

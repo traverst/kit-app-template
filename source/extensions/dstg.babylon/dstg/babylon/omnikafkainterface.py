@@ -8,6 +8,13 @@ from queue import Queue
 import omni.kit.app
 import carb
 import weakref
+
+import omni.kit.utils
+
+import gc
+
+import time
+
 from typing import Optional, Dict, Any, Callable
 
 ### LambdaStorage
@@ -70,7 +77,7 @@ class datarequest:
 
 
 class OmniKafkaHandler:
-    def __init__(self, kafka_host="localhost:9092", group_id="PythonGroup"):
+    def __init__(self, kafka_host="localhost:9092", group_id="Omniverse"):
         self.kafka_host = kafka_host
         self.producer = AIOKafkaProducer(
             bootstrap_servers=kafka_host,
@@ -81,11 +88,13 @@ class OmniKafkaHandler:
         self.messagehandlers = LambdaStorage()
         self._is_consuming = False
         self._update_sub = None
+        self._poll_task = None
 
     async def start(self, topic: str):
         """Start both producer and consumer"""
         await self.start_producer()
         await self.start_consumer(topic)
+        carb.log_info(f"Consuming {topic} and starting polling")
         self.start_polling()
 
     async def start_producer(self):
@@ -98,10 +107,20 @@ class OmniKafkaHandler:
             topic,
             bootstrap_servers=self.kafka_host,
             group_id=self.group_id,
-            auto_offset_reset='earliest'
+            auto_offset_reset='earliest',
+            max_partition_fetch_bytes=50 * 1024 * 1024,  # Increase to 50MB (adjust as needed)
+            fetch_max_bytes=50 * 1024 * 1024,  # Increase the max fetch bytes
+            request_timeout_ms=30000,  # Increase timeout
+            # Critical timeouts for heavy processing
+            session_timeout_ms= 300 * 1000 ,  # 45 secs
+            max_poll_interval_ms=300000,    # Default 5m → 5m (adjust based on USD op duration)
+            heartbeat_interval_ms=10000,     # `10 secs`
+            max_poll_records=100            # Reduce batch size for USD workloads
         )
         await self.consumer.start()
         carb.log_info("Kafka consumer initialized")
+
+
 
     def start_polling(self):
         """Start polling for messages using Omniverse's update subscription"""
@@ -109,44 +128,62 @@ class OmniKafkaHandler:
             self._is_consuming = True
             # Use weak reference to prevent memory leaks
             weak_self = weakref.ref(self)
+            carb.log_info("starting the polling")
 
             async def _poll_messages():
                 """Poll for messages from Kafka"""
                 try:
                     if self.consumer:
-                        messages = await self.consumer.getmany(timeout_ms=100)
-                        for tp, msgs in messages.items():
-                            for msg in msgs:
-                                try:
-                                    carb.log_info("result received")
-                                    key = str(msg.key.decode('utf-8')) if msg.key else None
-                                    value = msgpack.unpackb(msg.value, raw=False)
-                                    # Process message immediately
-                                    carb.log_info(f"Key {key} Value: {value}")
-                                    if key and key in self.messagehandlers.function_store:
-                                        carb.log_info("execute function")
+                        #messages = await self.consumer.getmany(timeout_ms=100)
+                        msg = await self.consumer.getone()
 
-                                        self.messagehandlers.execute_function(
-                                            function_id=key,
-                                            kwargs=value
-                                        )
-                                except Exception as e:
-                                    carb.log_error(f"Error processing message: {e}")
+             #           for tp, msgs in messages.items():
+            #               for msg in msgs:
+                        try:
+                            carb.log_info(f"Received message at {time.time()}: {len(msg.value)} bytes")
+                            start = time.time()
+                            carb.log_info(f"Starting ...{start}")  # Debug log
+                            key = str(msg.key.decode('utf-8')) if msg.key else None
+
+                            gc.disable()
+                            value = msgpack.unpackb(msg.value, raw=False)
+                            gc.enable()
+
+                            # Process message immediately
+                            # carb.log_info(f"Key {key} Value: {value}")
+                            if key and key in self.messagehandlers.function_store:
+                                carb.log_info("execute function")
+
+                                self.messagehandlers.execute_function(
+                                    function_id=key,
+                                    kwargs=value
+                                )
+                            finish = time.time()
+                            carb.log_info(f".... finished {finish} with elapsed: {finish - start} secs")  # Debug log
+                        except Exception as e:
+                            carb.log_error(f"Error processing message: {e}")
                 except Exception as e:
                     carb.log_error(f"Error polling messages: {e}")
                 return True
 
+            # def _update(dt):
+            #     self_ref = weak_self()
+            #     if self_ref is not None and self_ref._is_consuming:
+            #         # Schedule the async poll in Omniverse's event loop
+            #         asyncio.run_coroutine_threadsafe(_poll_messages(), asyncio.get_event_loop())
+            #     return True
             def _update(dt):
                 self_ref = weak_self()
                 if self_ref is not None and self_ref._is_consuming:
-                    # Schedule the async poll in Omniverse's event loop
-                    asyncio.run_coroutine_threadsafe(_poll_messages(), asyncio.get_event_loop())
+                    loop = asyncio.get_event_loop()  # Ensures an event loop is retrieved safely
+                    self._poll_task = loop.create_task(_poll_messages())  # Schedule as a task, allows carb logs # record for shutdown!
                 return True
 
             # Subscribe to update events using Omniverse's update mechanism
             self._update_sub = omni.kit.app.get_app().get_update_event_stream().create_subscription_to_pop(
                 _update, name="kafka_consumer_polling"
             )
+
 
     async def stop(self):
         """Stop both producer and consumer"""
@@ -166,8 +203,11 @@ class OmniKafkaHandler:
     def stop_polling(self):
         """Stop polling for messages"""
         self._is_consuming = False
+        if self._poll_task:
+            self._poll_task.cancel()  # cancel the poll task!
+            self._poll_taks = None
         if self._update_sub is not None:
-            self._update_sub.destroy()
+            self._update_sub.unsubscribe()
             self._update_sub = None
 
     async def send_message(self, *, topic: str, key_value: str, message_to_send: Any):
@@ -198,7 +238,7 @@ class OmniKafkaHandler:
         return unique_id
 
 class OmniKafkaInterface:
-    def __init__(self, kafka_host="localhost:9092", group_id="PythonGroup"):
+    def __init__(self, kafka_host="localhost:9092", group_id="Omniverse"):
         self.kafka_handler = None
         self.kafka_host = kafka_host
         self.group_id = group_id

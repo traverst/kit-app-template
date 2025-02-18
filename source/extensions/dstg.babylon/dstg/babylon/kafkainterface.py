@@ -124,6 +124,8 @@ class AsyncKafkaHandler:
             topic,
             bootstrap_servers=self.kafka_host,
             group_id=self.group_id,
+            max_partition_fetch_bytes=104857600,
+            fetch_max_wait_ms= 2000,
             auto_offset_reset='earliest',
             value_deserializer=lambda v: msgpack.unpackb(v, raw=False)
         )
@@ -136,7 +138,7 @@ class AsyncKafkaHandler:
                 try:
                     key = msg.key.decode('utf-8') if msg.key else None
                     value = msg.value
-                    print(f"Received message - Key: {key}, Value: {value}")
+                    # print(f"Received message - Key: {key}, Value: {value}")
                     self.message_queue.put((key, value))
                 except Exception as e:
                     print(f"Error processing message: {e}")

@@ -1,0 +1,14 @@
+Current Issues
+
+Fixed - Data: /World/CCPB_811_816_Whole_boat/U12_nwd/CCPB_U12_ELEC_ARRGT_BRIDGE_EQUIPMENTS_nwc/M8_BOLT_NUT/node_0RU_X_600W_X_600D/node_0RU_X_600W_X_600D
+has insert as the name not the child... seems to be when the type of the first child is Block!
+
+Competed - GUI: we have a type that is xform and a name that is mesh_D_Solid then revert to the parent in the selection!
+
+Fixed- DATA: /World/CCPB_811_816_Whole_boat/U01_nwd/U01_HVAC_SYSTEM_nwd/node_05_U01_DAMPERS___VALVES_VAF_dwg
+    has & in name need to make it a _ in the data!
+
+Unsolved: /World/CCPB_811_816_Whole_boat/U01_nwd/U01_PIPE_SYSTEM_nwd/CCPB_401B_U01_RAC_dwg/node_EQUI/Equipment
+          /World/CCPB_811_816_Whole_boat/U01_nwd/U01_PIPE_SYSTEM_nwd/CCPB_401B_U01_RAC_dwg/node_/Equipment
+
+    the Equipment isn't appearing in the data but everything else is that is similar works as expected.
